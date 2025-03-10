@@ -1,0 +1,6 @@
+{
+  "nombre": "Aldair Cruz",
+  "email": "acruz.pbxhosting@gmail.com",
+  "password": "#Shoyamato501",
+  "rol": "admin"
+}
