@@ -1,45 +1,51 @@
 <?php
-require_once 'db.php';
+include 'db.php';
 
-// Crear una nueva lección
-function crearLeccion($curso_id, $titulo, $contenido) {
+// Función para crear una nueva lección (solo administrador)
+function createLesson($curso_id, $titulo, $descripcion, $contenido_texto, $video_url, $pdf_url) {
     global $pdo;
-    $sql = "INSERT INTO lecciones (curso_id, titulo, contenido) VALUES (?, ?, ?)";
-    $stmt = $pdo->prepare($sql);
-    return $stmt->execute([$curso_id, $titulo, $contenido]);
+    $stmt = $pdo->prepare("INSERT INTO lecciones (curso_id, titulo, descripcion, contenido_texto, video_url, pdf_url) 
+                           VALUES (:curso_id, :titulo, :descripcion, :contenido_texto, :video_url, :pdf_url)");
+    $stmt->execute([
+        'curso_id' => $curso_id,
+        'titulo' => $titulo,
+        'descripcion' => $descripcion,
+        'contenido_texto' => $contenido_texto,
+        'video_url' => $video_url,
+        'pdf_url' => $pdf_url
+    ]);
+    return ['success' => 'Lección creada exitosamente.'];
 }
 
-// Obtener todas las lecciones de un curso
-function obtenerLeccionesPorCurso($curso_id) {
+// Función para actualizar una lección (solo administrador)
+function updateLesson($leccion_id, $titulo, $descripcion, $contenido_texto, $video_url, $pdf_url) {
     global $pdo;
-    $sql = "SELECT * FROM lecciones WHERE curso_id = ?";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([$curso_id]);
-    return $stmt->fetchAll();
+    $stmt = $pdo->prepare("UPDATE lecciones SET titulo = :titulo, descripcion = :descripcion, contenido_texto = :contenido_texto, 
+                           video_url = :video_url, pdf_url = :pdf_url WHERE id = :leccion_id");
+    $stmt->execute([
+        'titulo' => $titulo,
+        'descripcion' => $descripcion,
+        'contenido_texto' => $contenido_texto,
+        'video_url' => $video_url,
+        'pdf_url' => $pdf_url,
+        'leccion_id' => $leccion_id
+    ]);
+    return ['success' => 'Lección actualizada exitosamente.'];
 }
 
-// Obtener una lección por ID
-function obtenerLeccionPorId($id) {
+// Función para eliminar una lección (solo administrador)
+function deleteLesson($leccion_id) {
     global $pdo;
-    $sql = "SELECT * FROM lecciones WHERE id = ?";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([$id]);
-    return $stmt->fetch();
+    $stmt = $pdo->prepare("DELETE FROM lecciones WHERE id = :leccion_id");
+    $stmt->execute(['leccion_id' => $leccion_id]);
+    return ['success' => 'Lección eliminada exitosamente.'];
 }
 
-// Actualizar una lección
-function actualizarLeccion($id, $titulo, $contenido) {
+// Función para obtener las lecciones de un curso
+function getLessonsByCourse($curso_id) {
     global $pdo;
-    $sql = "UPDATE lecciones SET titulo = ?, contenido = ? WHERE id = ?";
-    $stmt = $pdo->prepare($sql);
-    return $stmt->execute([$titulo, $contenido, $id]);
-}
-
-// Eliminar una lección
-function eliminarLeccion($id) {
-    global $pdo;
-    $sql = "DELETE FROM lecciones WHERE id = ?";
-    $stmt = $pdo->prepare($sql);
-    return $stmt->execute([$id]);
+    $stmt = $pdo->prepare("SELECT * FROM lecciones WHERE curso_id = :curso_id");
+    $stmt->execute(['curso_id' => $curso_id]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 ?>

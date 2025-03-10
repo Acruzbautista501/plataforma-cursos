@@ -1,138 +1,121 @@
 <?php
-
+require 'db.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-require 'PHPMailer/src/Exception.php';
-require 'PHPMailer/src/PHPMailer.php';
-require 'PHPMailer/src/SMTP.php';
-require_once 'db.php';
+require 'vendor/autoload.php'; // Asegúrate de que PHPMailer esté configurado correctamente
 
-// Registro de usuario
-function registrarUsuario($nombre, $email, $password, $rol = 'usuario') {
+// Función para registrar un nuevo usuario
+function registrarUsuario($nombre, $email, $password) {
     global $pdo;
-    $passwordHash = password_hash($password, PASSWORD_BCRYPT);
-    $sql = "INSERT INTO usuarios (nombre, email, password, rol) VALUES (?, ?, ?, ?)";
-    $stmt = $pdo->prepare($sql);
-    if ($stmt->execute([$nombre, $email, $passwordHash, $rol])) {
-        enviarCorreoConfirmacion($email);
-        return true;
-    }
-    return false;
+    $password_hash = password_hash($password, PASSWORD_BCRYPT);
+    $stmt = $pdo->prepare("INSERT INTO usuarios (nombre, email, password) VALUES (?, ?, ?)");
+    $stmt->execute([$nombre, $email, $password_hash]);
+    // El nuevo usuario no está confirmado por defecto
+    enviarEmailConfirmacion($email);
 }
 
-// Inicio de sesión
-function iniciarSesion($email, $password) {
+// Función para iniciar sesión
+function loginUsuario($email, $password) {
     global $pdo;
-    $sql = "SELECT * FROM usuarios WHERE email = ?";
-    $stmt = $pdo->prepare($sql);
+    $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE email = ?");
     $stmt->execute([$email]);
-    $usuario = $stmt->fetch();
-
+    $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
+    
     if ($usuario && password_verify($password, $usuario['password'])) {
-        if (!$usuario['confirmado']) {
-            return 'Usuario no confirmado';
-        }
-        
-        // Aquí verificamos si el usuario es un administrador
-        if ($usuario['rol'] === 'admin') {
-            $_SESSION['usuario_id'] = $usuario['id'];
-            $_SESSION['rol'] = $usuario['rol'];
-            return $usuario; // Devolver el usuario administrador
+        // Verificar si el usuario está confirmado
+        if ($usuario['confirmado']) {
+            return $usuario;
         } else {
-            return 'Acceso no autorizado: solo administradores pueden acceder al dashboard de administrador';
+            return ['error' => 'Usuario no confirmado.'];
         }
+    } else {
+        return ['error' => 'Credenciales incorrectas.'];
     }
-    return false;
 }
 
-
-// Confirmación de usuario
+// Función para confirmar un usuario (con enlace enviado por email)
 function confirmarUsuario($email) {
     global $pdo;
-    $sql = "UPDATE usuarios SET confirmado = 1 WHERE email = ?";
-    $stmt = $pdo->prepare($sql);
-    return $stmt->execute([$email]);
-}
-
-// Enviar correo de confirmación
-function enviarCorreoConfirmacion($email) {
-    $mail = new PHPMailer(true);
-
-    try {
-        $mail->isSMTP();
-        $mail->Host = 'smtp.tuservidor.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = 'tuemail@tuservidor.com';
-        $mail->Password = 'tucontraseña';
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = 587;
-
-        $mail->setFrom('tuemail@tuservidor.com', 'Plataforma Cursos');
-        $mail->addAddress($email);
-
-        $mail->isHTML(true);
-        $mail->Subject = 'Confirma tu cuenta';
-        $link = "http://tusitio.com/confirmar.php?email=$email";
-        $mail->Body = "<p>Haz clic en el siguiente enlace para confirmar tu cuenta:</p><p><a href='$link'>$link</a></p>";
-
-        $mail->send();
-    } catch (Exception $e) {
-        error_log('Error al enviar correo de confirmación: ' . $mail->ErrorInfo);
-    }
-}
-
-// Recuperación de contraseña
-function enviarCorreoRecuperacion($email) {
-    global $pdo;
-
-    $sql = "SELECT * FROM usuarios WHERE email = ?";
-    $stmt = $pdo->prepare($sql);
+    $stmt = $pdo->prepare("UPDATE usuarios SET confirmado = TRUE WHERE email = ?");
     $stmt->execute([$email]);
-    $usuario = $stmt->fetch();
-
-    if (!$usuario) {
-        return 'No se encontró el usuario';
-    }
-
-    $token = bin2hex(random_bytes(50));
-    $sql = "UPDATE usuarios SET token = ? WHERE email = ?";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([$token, $email]);
-
-    $link = "http://tusitio.com/restablecer.php?token=$token";
-
-    $mail = new PHPMailer(true);
-
-    try {
-        $mail->isSMTP();
-        $mail->Host = 'smtp.tuservidor.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = 'tuemail@tuservidor.com';
-        $mail->Password = 'tucontraseña';
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = 587;
-
-        $mail->setFrom('tuemail@tuservidor.com', 'Plataforma Cursos');
-        $mail->addAddress($email);
-
-        $mail->isHTML(true);
-        $mail->Subject = 'Recuperación de contraseña';
-        $mail->Body = "<p>Para restablecer tu contraseña, haz clic en el siguiente enlace:</p><p><a href='$link'>$link</a></p>";
-
-        $mail->send();
-        return 'Correo enviado con éxito';
-    } catch (Exception $e) {
-        return 'Error al enviar el correo: ' . $mail->ErrorInfo;
-    }
 }
 
-// Eliminar usuario
-function eliminarUsuario($usuario_id) {
+// Función para enviar un email de confirmación
+function enviarEmailConfirmacion($email) {
     global $pdo;
-    $sql = "DELETE FROM usuarios WHERE id = ?";
-    $stmt = $pdo->prepare($sql);
-    return $stmt->execute([$usuario_id]);
+    $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE email = ?");
+    $stmt->execute([$email]);
+    $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if ($usuario) {
+        // PHPMailer para enviar el correo
+        $mail = new PHPMailer(true);
+        try {
+            $mail->isSMTP();
+            $mail->Host = 'smtp.example.com';  // Cambiar con tu servidor SMTP
+            $mail->SMTPAuth = true;
+            $mail->Username = 'your-email@example.com';  // Cambiar con tu correo
+            $mail->Password = 'your-password';  // Cambiar con tu contraseña
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port = 587;
+            
+            $mail->setFrom('no-reply@example.com', 'Plataforma Cursos');
+            $mail->addAddress($usuario['email']);
+            
+            $mail->isHTML(true);
+            $mail->Subject = 'Confirmación de cuenta';
+            $mail->Body    = 'Haz clic en el siguiente enlace para confirmar tu cuenta: <a href="http://example.com/confirmar?email='.$usuario['email'].'">Confirmar cuenta</a>';
+            
+            $mail->send();
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+    return false;
 }
 
+// Función para recuperar contraseña
+function recuperarContraseña($email) {
+    global $pdo;
+    $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE email = ?");
+    $stmt->execute([$email]);
+    $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if ($usuario) {
+        // PHPMailer para enviar el correo de restablecimiento
+        $mail = new PHPMailer(true);
+        try {
+            $mail->isSMTP();
+            $mail->Host = 'smtp.example.com';  // Cambiar con tu servidor SMTP
+            $mail->SMTPAuth = true;
+            $mail->Username = 'your-email@example.com';  // Cambiar con tu correo
+            $mail->Password = 'your-password';  // Cambiar con tu contraseña
+            $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port = 587;
+            
+            $mail->setFrom('no-reply@example.com', 'Plataforma Cursos');
+            $mail->addAddress($usuario['email']);
+            
+            $mail->isHTML(true);
+            $mail->Subject = 'Restablecimiento de contraseña';
+            $mail->Body    = 'Haz clic en el siguiente enlace para restablecer tu contraseña: <a href="http://example.com/reset-password?email='.$usuario['email'].'">Restablecer contraseña</a>';
+            
+            $mail->send();
+            return true;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+    return false;
+}
+
+// Función para restablecer la contraseña
+function restablecerContraseña($email, $nueva_contraseña) {
+    global $pdo;
+    $password_hash = password_hash($nueva_contraseña, PASSWORD_BCRYPT);
+    $stmt = $pdo->prepare("UPDATE usuarios SET password = ? WHERE email = ?");
+    $stmt->execute([$password_hash, $email]);
+}
 ?>

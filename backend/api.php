@@ -1,188 +1,133 @@
 <?php
 header('Content-Type: application/json');
-require_once 'cursos.php';
-require_once 'lecciones.php';
-require_once 'evaluaciones.php';
-require_once 'resultados.php';
-require_once 'auth.php';
-require_once 'db.php';
+include 'db.php';  // Conexión a la base de datos
+include 'auth.php'; // Autenticación
+include 'cursos.php'; // CRUD de cursos
+include 'lecciones.php'; // CRUD de lecciones
+include 'evaluaciones.php'; // CRUD de evaluaciones
+include 'resultados.php'; // Registro de intentos y puntajes
 
-// Aquí puedes agregar las rutas para manejar la API en formato JSON para Vue.js
+// Obtener el método HTTP utilizado
+$method = $_SERVER['REQUEST_METHOD'];
 
-if ($_SERVER['REQUEST_METHOD'] == 'GET') {
-    if (isset($_GET['action'])) {
-        switch ($_GET['action']) {
-            case 'cursos':
-                echo json_encode(obtenerCursos());
-                break;
-            case 'lecciones':
-                $curso_id = $_GET['curso_id'] ?? 0;
-                echo json_encode(obtenerLeccionesPorCurso($curso_id));
-                break;
-            case 'evaluaciones':
-                $curso_id = $_GET['curso_id'] ?? 0;
-                echo json_encode(obtenerEvaluacionesPorCurso($curso_id));
-                break;
-            case 'resultados':
-                $usuario_id = $_GET['usuario_id'] ?? 0;
-                echo json_encode(obtenerResultadosPorUsuario($usuario_id));
-                break;
-            default:
-                echo json_encode(['error' => 'Acción no válida']);
-        }
-    }
-} elseif ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    if (isset($_GET['action'])) {
-        switch ($_GET['action']) {
-            case 'crear_curso':
-                $titulo = $_POST['titulo'] ?? '';
-                $descripcion = $_POST['descripcion'] ?? '';
-                if (crearCurso($titulo, $descripcion)) {
-                    echo json_encode(['mensaje' => 'Curso creado exitosamente']);
-                } else {
-                    echo json_encode(['error' => 'No se pudo crear el curso']);
-                }
-                break;
-            case 'crear_leccion':
-                $curso_id = $_POST['curso_id'] ?? 0;
-                $titulo = $_POST['titulo'] ?? '';
-                $contenido = $_POST['contenido'] ?? '';
-                $video_url = $_POST['video_url'] ?? '';
-                if (crearLeccion($curso_id, $titulo, $contenido, $video_url)) {
-                    echo json_encode(['mensaje' => 'Lección creada exitosamente']);
-                } else {
-                    echo json_encode(['error' => 'No se pudo crear la lección']);
-                }
-                break;
-            case 'crear_evaluacion':
-                $curso_id = $_POST['curso_id'] ?? 0;
-                $titulo = $_POST['titulo'] ?? '';
-                $descripcion = $_POST['descripcion'] ?? '';
-                $preguntas = $_POST['preguntas'] ?? [];
-                if (crearEvaluacion($curso_id, $titulo, $descripcion, $preguntas)) {
-                    echo json_encode(['mensaje' => 'Evaluación creada exitosamente']);
-                } else {
-                    echo json_encode(['error' => 'No se pudo crear la evaluación']);
-                }
-                break;
-            case 'registro':
-                $nombre = $_POST['nombre'] ?? '';
-                $email = $_POST['email'] ?? '';
-                $password = $_POST['password'] ?? '';
-                if (registrarUsuario($nombre, $email, $password)) {
-                    echo json_encode(['mensaje' => 'Usuario registrado exitosamente. Por favor, revisa tu correo para confirmar tu cuenta.']);
-                } else {
-                    echo json_encode(['error' => 'No se pudo registrar el usuario']);
-                }
-                break;
-            case 'login':
-                $email = $_POST['email'] ?? '';
-                $password = $_POST['password'] ?? '';
-                $usuario = iniciarSesion($email, $password);
-                if ($usuario === 'Usuario no confirmado') {
-                    echo json_encode(['error' => 'Usuario no confirmado. Por favor, confirma tu cuenta.']);
-                } elseif ($usuario) {
-                    echo json_encode(['mensaje' => 'Inicio de sesión exitoso', 'usuario' => $usuario]);
-                } else {
-                    echo json_encode(['error' => 'Credenciales incorrectas']);
-                }
-                break;
-            case 'recuperar_contraseña':
-                $email = $_POST['email'] ?? '';
-                $mensaje = enviarCorreoRecuperacion($email);
-                echo json_encode(['mensaje' => $mensaje]);
-                break;
-            default:
-                echo json_encode(['error' => 'Acción no válida']);
-        }
-    }
-} elseif ($_SERVER['REQUEST_METHOD'] == 'PUT') {
-    if (isset($_GET['action'])) {
-        switch ($_GET['action']) {
-            case 'editar_curso':
-                $curso_id = $_GET['curso_id'] ?? 0;
-                $titulo = $_POST['titulo'] ?? '';
-                $descripcion = $_POST['descripcion'] ?? '';
-                if (editarCurso($curso_id, $titulo, $descripcion)) {
-                    echo json_encode(['mensaje' => 'Curso actualizado exitosamente']);
-                } else {
-                    echo json_encode(['error' => 'No se pudo actualizar el curso']);
-                }
-                break;
-            case 'editar_leccion':
-                $leccion_id = $_GET['leccion_id'] ?? 0;
-                $titulo = $_POST['titulo'] ?? '';
-                $contenido = $_POST['contenido'] ?? '';
-                $video_url = $_POST['video_url'] ?? '';
-                if (editarLeccion($leccion_id, $titulo, $contenido, $video_url)) {
-                    echo json_encode(['mensaje' => 'Lección actualizada exitosamente']);
-                } else {
-                    echo json_encode(['error' => 'No se pudo actualizar la lección']);
-                }
-                break;
-            case 'editar_evaluacion':
-                $evaluacion_id = $_GET['evaluacion_id'] ?? 0;
-                $titulo = $_POST['titulo'] ?? '';
-                $descripcion = $_POST['descripcion'] ?? '';
-                $preguntas = $_POST['preguntas'] ?? [];
-                if (editarEvaluacion($evaluacion_id, $titulo, $descripcion, $preguntas)) {
-                    echo json_encode(['mensaje' => 'Evaluación actualizada exitosamente']);
-                } else {
-                    echo json_encode(['error' => 'No se pudo actualizar la evaluación']);
-                }
-                break;
-            default:
-                echo json_encode(['error' => 'Acción no válida']);
-        }
-    }
-} elseif ($_SERVER['REQUEST_METHOD'] == 'DELETE') {
-    if (isset($_GET['action'])) {
-        switch ($_GET['action']) {
-            case 'eliminar_curso':
-                $curso_id = $_GET['curso_id'] ?? 0;
-                if (eliminarCurso($curso_id)) {
-                    echo json_encode(['mensaje' => 'Curso eliminado exitosamente']);
-                } else {
-                    echo json_encode(['error' => 'No se pudo eliminar el curso']);
-                }
-                break;
-            case 'eliminar_leccion':
-                $leccion_id = $_GET['leccion_id'] ?? 0;
-                if (eliminarLeccion($leccion_id)) {
-                    echo json_encode(['mensaje' => 'Lección eliminada exitosamente']);
-                } else {
-                    echo json_encode(['error' => 'No se pudo eliminar la lección']);
-                }
-                break;
-            case 'eliminar_evaluacion':
-                $evaluacion_id = $_GET['evaluacion_id'] ?? 0;
-                if (eliminarEvaluacion($evaluacion_id)) {
-                    echo json_encode(['mensaje' => 'Evaluación eliminada exitosamente']);
-                } else {
-                    echo json_encode(['error' => 'No se pudo eliminar la evaluación']);
-                }
-                break;
-            case 'eliminar_usuario':
-                // Verificar si el usuario autenticado es un administrador
-                if ($_SESSION['rol'] != 'admin') {
-                    echo json_encode(['error' => 'No tienes permiso para realizar esta acción']);
-                    break;
-                }
+// Obtener la URI de la solicitud
+$request = $_SERVER['REQUEST_URI'];
+$request = explode('/', $request);
 
-                $usuario_id = $_GET['usuario_id'] ?? 0;
-
-                if (eliminarUsuario($usuario_id)) {
-                    echo json_encode(['mensaje' => 'Usuario eliminado exitosamente']);
-                } else {
-                    echo json_encode(['error' => 'No se pudo eliminar el usuario']);
-                }
-                break;
-            default:
-                echo json_encode(['error' => 'Acción no válida']);
-        }
+// Procesar las solicitudes según la URI y el método
+if ($request[1] == 'auth') {
+    switch ($method) {
+        case 'POST': // Registrar o iniciar sesión
+            if (isset($request[2]) && $request[2] == 'login') {
+                // Lógica de login
+                $data = json_decode(file_get_contents('php://input'), true);
+                $email = $data['email'];
+                $password = $data['password'];
+                echo json_encode(login($email, $password));
+            } elseif (isset($request[2]) && $request[2] == 'register') {
+                // Lógica de registro
+                $data = json_decode(file_get_contents('php://input'), true);
+                $nombre = $data['nombre'];
+                $email = $data['email'];
+                $password = $data['password'];
+                echo json_encode(register($nombre, $email, $password));
+            }
+            break;
+        case 'PUT': // Cambiar contraseña
+            if (isset($request[2]) && $request[2] == 'reset_password') {
+                // Lógica de restablecer la contraseña
+                $data = json_decode(file_get_contents('php://input'), true);
+                $email = $data['email'];
+                echo json_encode(restablecerContrasena($email));
+            }
+            break;
     }
+} elseif ($request[1] == 'cursos') {
+    switch ($method) {
+        case 'GET':
+            // Obtener todos los cursos o los cursos de un usuario específico
+            if (isset($request[2]) && is_numeric($request[2])) {
+                // Obtener un curso por su ID
+                echo json_encode(getCursoById($request[2]));
+            } else {
+                // Obtener todos los cursos
+                echo json_encode(getCursos());
+            }
+            break;
+        case 'POST':
+            // Crear un nuevo curso (solo administrador)
+            echo json_encode(createCurso($_POST));
+            break;
+        case 'PUT':
+            // Actualizar un curso (solo administrador)
+            echo json_encode(updateCurso($request[2], $_POST));
+            break;
+        case 'DELETE':
+            // Eliminar un curso (solo administrador)
+            echo json_encode(deleteCurso($request[2]));
+            break;
+    }
+} elseif ($request[1] == 'lecciones') {
+    switch ($method) {
+        case 'GET':
+            // Obtener lecciones de un curso
+            if (isset($request[2]) && is_numeric($request[2])) {
+                echo json_encode(getLeccionesByCurso($request[2]));
+            }
+            break;
+        case 'POST':
+            // Crear una lección (solo administrador)
+            echo json_encode(createLeccion($_POST));
+            break;
+        case 'PUT':
+            // Actualizar una lección (solo administrador)
+            echo json_encode(updateLeccion($request[2], $_POST));
+            break;
+        case 'DELETE':
+            // Eliminar una lección (solo administrador)
+            echo json_encode(deleteLeccion($request[2]));
+            break;
+    }
+} elseif ($request[1] == 'evaluaciones') {
+    switch ($method) {
+        case 'GET':
+            // Obtener todas las evaluaciones de un curso
+            if (isset($request[2]) && is_numeric($request[2])) {
+                echo json_encode(getEvaluacionesByCurso($request[2]));
+            }
+            break;
+        case 'POST':
+            // Crear una evaluación (solo administrador)
+            echo json_encode(createEvaluacion($_POST));
+            break;
+        case 'PUT':
+            // Actualizar una evaluación (solo administrador)
+            echo json_encode(updateEvaluacion($request[2], $_POST));
+            break;
+        case 'DELETE':
+            // Eliminar una evaluación (solo administrador)
+            echo json_encode(deleteEvaluacion($request[2]));
+            break;
+    }
+} elseif ($request[1] == 'resultados') {
+    switch ($method) {
+        case 'GET':
+            // Obtener los resultados de un usuario
+            if (isset($request[2]) && is_numeric($request[2])) {
+                echo json_encode(obtenerIntentos($request[2]));
+            }
+            break;
+        case 'POST':
+            // Registrar un intento de evaluación
+            $data = json_decode(file_get_contents('php://input'), true);
+            $usuario_id = $data['usuario_id'];
+            $evaluacion_id = $data['evaluacion_id'];
+            $intento = $data['intento'];
+            $puntaje = $data['puntaje'];
+            echo json_encode(registrarIntento($usuario_id, $evaluacion_id, $intento, $puntaje));
+            break;
+    }
+} else {
+    echo json_encode(['error' => 'Endpoint no encontrado.']);
 }
 ?>
-
-
-
